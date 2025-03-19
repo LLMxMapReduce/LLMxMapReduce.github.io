@@ -137,6 +137,40 @@
             font-size: 0.9rem;
         }
     </style>
+    <script>
+        async function loadSurveyList() {
+            try {
+                const response = await fetch('./files/metadata.json');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                const tbody = document.querySelector('.survey-list tbody');
+                tbody.innerHTML = '';
+                
+                if (!data.documents || !Array.isArray(data.documents)) {
+                    throw new Error('Invalid data format');
+                }
+
+                data.documents.forEach(doc => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${doc.title || 'Untitled'}</td>
+                        <td>${doc.date || 'No date'}</td>
+                        <td><a href="./files/${doc.file}" class="view-link">View</a></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (error) {
+                console.error('Error loading survey list:', error);
+                const tbody = document.querySelector('.survey-list tbody');
+                tbody.innerHTML = '<tr><td colspan="3">Failed to load survey list. Please try again later.</td></tr>';
+            }
+        }
+
+        // 页面加载完成后执行
+        document.addEventListener('DOMContentLoaded', loadSurveyList);
+    </script>
 </head>
 <body>
     <nav class="navbar">
@@ -148,35 +182,15 @@
         <h1 class="title">✨ LLMxMapReduce-v2 ✨</h1>
         <p class="subtitle">Produced by THUNLP</p>
 
-
         <table class="survey-list">
             <thead>
                 <tr>
                     <th>Topic</th>
+                    <th>Date</th>
                     <th>Operation</th>
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td>使用NLP和机器学习的假新闻检测和错误信息检测调查</td>
-                    <td><a href="files/nlp-fake-news.md" class="view-link">View</a></td>
-                </tr>
-                <tr>
-                    <td>空间物体感知和空间态势感知技术调查</td>
-                    <td><a href="files/space-perception.md" class="view-link">View</a></td>
-                </tr>
-                <tr>
-                    <td>大型语言模型及其系统架构集成调查</td>
-                    <td><a href="files/llm-system-arch.md" class="view-link">View</a></td>
-                </tr>
-                <tr>
-                    <td>低理论互文性和作者理论调查</td>
-                    <td><a href="files/bong-joon-ho.md" class="view-link">View</a></td>
-                </tr>
-                <tr>
-                    <td>大型语言模型中的提示编程和提示语言调查</td>
-                    <td><a href="files/llm-prompt.md" class="view-link">View</a></td>
-                </tr>
             </tbody>
         </table>
     </div>
