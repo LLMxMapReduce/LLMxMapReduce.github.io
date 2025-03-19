@@ -103,15 +103,47 @@
             }
         }
 
+        function validateAndFormatDate(dateStr) {
+            if (!dateStr) return null;
+            const dateRegex = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
+            const match = dateStr.match(dateRegex);
+            
+            if (!match) return null;
+            
+            const year = parseInt(match[1]);
+            const month = parseInt(match[2]);
+            const day = parseInt(match[3]);
+            
+            if (month < 1 || month > 12) return null;
+            
+            const daysInMonth = new Date(year, month, 0).getDate();
+            if (day < 1 || day > daysInMonth) return null;
+            
+            const formattedMonth = month.toString().padStart(2, '0');
+            const formattedDay = day.toString().padStart(2, '0');
+            
+            return `${year}-${formattedMonth}-${formattedDay}`;
+        }
+
         function updateTable(documents) {
-            const startDate = document.getElementById('start-date').value;
-            const endDate = document.getElementById('end-date').value;
+            let startDate = document.getElementById('start-date').value;
+            let endDate = document.getElementById('end-date').value;
+            
+            startDate = validateAndFormatDate(startDate);
+            endDate = validateAndFormatDate(endDate);
+            
+            if (startDate) {
+                document.getElementById('start-date').value = startDate;
+            }
+            if (endDate) {
+                document.getElementById('end-date').value = endDate;
+            }
             
             let filteredDocs = documents;
             if (startDate && endDate) {
                 filteredDocs = documents.filter(doc => {
-                    const docDate = new Date(doc.date);
-                    return docDate >= new Date(startDate) && docDate <= new Date(endDate);
+                    const docDate = validateAndFormatDate(doc.date);
+                    return docDate && docDate >= startDate && docDate <= endDate;
                 });
             }
 
