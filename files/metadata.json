@@ -1,44 +1,29 @@
 {
   "documents": [
     {
-      "title": "空间物体感知和空间态势感知技术调查",
-      "file": "space-perception.md",
-      "date": "2025-03-18"
+      "title": "使用NLP和机器学习的假新闻检测和错误信息检测调查",
+      "file": "nlp-fake-news.md",
+      "date": "2023-12-01"
     },
     {
-        "title": "使用NLP和机器学习的假新闻检测和错误信息检测调查",
-        "file": "nlp-fake-news.md",
-        "date": "2025-3-19"
-      },  
+      "title": "空间物体感知和空间态势感知技术调查",
+      "file": "space-perception.md",
+      "date": "2023-12-05"
+    },
     {
       "title": "大型语言模型及其系统架构集成调查",
       "file": "llm-system-arch.md",
-      "date": "2025-03-17"
+      "date": "2023-12-10"
     },
     {
       "title": "低理论互文性和作者理论调查",
       "file": "bong-joon-ho.md",
-      "date": "2025-03-16"
+      "date": "2023-12-15"
     },
     {
       "title": "大型语言模型中的提示编程和提示语言调查",
       "file": "llm-prompt.md",
-      "date": "2025-03-15"
-    },
-    {
-      "title": "深度学习在计算机视觉中的应用调查",
-      "file": "cv-deep-learning.md",
-      "date": "2025-03-14"
-    },
-    {
-      "title": "区块链技术在供应链管理中的应用调查",
-      "file": "blockchain-supply-chain.md",
-      "date": "2025-03-13"
-    },
-    {
-      "title": "量子计算在密码学中的应用前景调查",
-      "file": "quantum-cryptography.md",
-      "date": "2025-03-12"
+      "date": "2023-12-20"
     }
   ]
 }
