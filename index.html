@@ -80,8 +80,38 @@
             color: #4c6ef5;
             text-decoration: none;
         }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .pagination button {
+            padding: 0.5rem 1rem;
+            border: 1px solid #e0e0e0;
+            background-color: white;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        .pagination button:disabled {
+            background-color: #f5f5f5;
+            cursor: not-allowed;
+        }
     </style>
     <script>
+        const ITEMS_PER_PAGE = 5;
+        let currentPage = 1;
+        let allDocuments = [];
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return 'Invalid Date';
+            return date.toISOString().split('T')[0];
+        }
+
         async function loadSurveyList() {
             try {
                 const response = await fetch('./files/metadata.json');
@@ -89,7 +119,8 @@
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const data = await response.json();
-                updateTable(data.documents);
+                allDocuments = data.documents;
+                updateTable(allDocuments);
             } catch (error) {
                 console.error('Error loading survey list:', error);
                 const tbody = document.querySelector('.survey-list tbody');
@@ -117,15 +148,39 @@
                 return;
             }
 
-            filteredDocs.forEach(doc => {
+            const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+            const endIndex = startIndex + ITEMS_PER_PAGE;
+            const pageItems = filteredDocs.slice(startIndex, endIndex);
+
+            pageItems.forEach(doc => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${doc.title || 'Untitled'}</td>
-                    <td>${doc.date || 'No date'}</td>
+                    <td>${formatDate(doc.date) || 'No date'}</td>
                     <td><a href="./files/${doc.file}" class="view-link">View</a></td>
                 `;
                 tbody.appendChild(tr);
             });
+
+            updatePagination(filteredDocs.length);
+        }
+
+        function updatePagination(totalItems) {
+            const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+            const pagination = document.querySelector('.pagination');
+            pagination.innerHTML = `
+                <button onclick="changePage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>
+                    Previous
+                </button>
+                <button onclick="changePage(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''}>
+                    Next
+                </button>
+            `;
+        }
+
+        function changePage(page) {
+            currentPage = page;
+            updateTable(allDocuments);
         }
 
         // 页面加载完成后执行
@@ -136,10 +191,14 @@
             document.getElementById('start-date').addEventListener('change', () => {
                 const startDate = new Date(document.getElementById('start-date').value);
                 document.getElementById('end-date').min = startDate.toISOString().split('T')[0];
+                currentPage = 1;
                 loadSurveyList();
             });
             
-            document.getElementById('end-date').addEventListener('change', loadSurveyList);
+            document.getElementById('end-date').addEventListener('change', () => {
+                currentPage = 1;
+                loadSurveyList();
+            });
         });
     </script>
 </head>
