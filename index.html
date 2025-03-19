@@ -84,7 +84,13 @@
     <script>
         async function loadSurveyList() {
             try {
-                const response = await fetch('./files/metadata.json');
+                const response = await fetch(`./files/metadata.json?_=${Date.now()}`, {
+                    cache: 'no-store',
+                    headers: {
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache'
+                    }
+                });
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
