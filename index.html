@@ -110,14 +110,17 @@
             
             if (!match) return null;
             
-            const year = parseInt(match[1]);
-            const month = parseInt(match[2]);
-            const day = parseInt(match[3]);
+            let year = parseInt(match[1]);
+            let month = parseInt(match[2]);
+            let day = parseInt(match[3]);
             
-            if (month < 1 || month > 12) return null;
+            // 修正月份范围
+            month = Math.max(1, Math.min(12, month));
             
+            // 获取当月最大天数
             const daysInMonth = new Date(year, month, 0).getDate();
-            if (day < 1 || day > daysInMonth) return null;
+            // 修正日期范围
+            day = Math.max(1, Math.min(daysInMonth, day));
             
             const formattedMonth = month.toString().padStart(2, '0');
             const formattedDay = day.toString().padStart(2, '0');
@@ -164,9 +167,10 @@
 
             filteredDocs.forEach(doc => {
                 const tr = document.createElement('tr');
+                const formattedDate = validateAndFormatDate(doc.date) || 'No date';
                 tr.innerHTML = `
                     <td>${doc.title || 'Untitled'}</td>
-                    <td>${doc.date || 'No date'}</td>
+                    <td>${formattedDate}</td>
                     <td><a href="./files/${doc.file}" class="view-link">View</a></td>
                 `;
                 tbody.appendChild(tr);
