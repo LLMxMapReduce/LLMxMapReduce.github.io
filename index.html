@@ -146,6 +146,13 @@
                     return docDate && docDate >= startDate && docDate <= endDate;
                 });
             }
+            
+            // 按日期从新到旧排序
+            filteredDocs.sort((a, b) => {
+                const dateA = validateAndFormatDate(a.date) || '';
+                const dateB = validateAndFormatDate(b.date) || '';
+                return dateB.localeCompare(dateA);
+            });
 
             const tbody = document.querySelector('.survey-list tbody');
             tbody.innerHTML = '';
