@@ -24,6 +24,41 @@
       "title": "大型语言模型中的提示编程和提示语言调查",
       "file": "llm-prompt.md",
       "date": "2025-03-20"
+    },
+    {
+      "title": "深度学习在计算机视觉中的应用调查",
+      "file": "deep-learning-cv.md",
+      "date": "2025-02-21"
+    },
+    {
+      "title": "区块链技术在供应链管理中的应用调查",
+      "file": "blockchain-supply-chain.md",
+      "date": "2025-02-22"
+    },
+    {
+      "title": "量子计算在密码学中的应用调查",
+      "file": "quantum-cryptography.md",
+      "date": "2025-02-23"
+    },
+    {
+      "title": "边缘计算在物联网中的应用调查",
+      "file": "edge-computing-iot.md",
+      "date": "2025-02-24"
+    },
+    {
+      "title": "自然语言处理在医疗诊断中的应用调查",
+      "file": "nlp-medical-diagnosis.md",
+      "date": "2025-02-25"
+    },
+    {
+      "title": "强化学习在自动驾驶中的应用调查",
+      "file": "reinforcement-learning-autonomous.md",
+      "date": "2025-02-26"
+    },
+    {
+      "title": "图神经网络在社交网络分析中的应用调查",
+      "file": "gnn-social-network.md",
+      "date": "2025-02-27"
     }
   ]
 }
