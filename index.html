@@ -37,20 +37,6 @@
             padding: 0 1rem;
         }
 
-        .avatar-group {
-            display: flex;
-            justify-content: center;
-            gap: 1rem;
-            margin: 3rem 0;
-        }
-
-        .avatar {
-            width: 64px;
-            height: 64px;
-            border-radius: 50%;
-            background-color: #e0e0e0;
-        }
-
         .title {
             text-align: center;
             margin-bottom: 0.5rem;
@@ -63,52 +49,19 @@
             font-size: 0.9rem;
         }
 
-        .user-section {
-            background-color: white;
-            border-radius: 10px;
-            padding: 2rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 2rem;
-        }
-
-        .user-header {
+        .date-filter {
             display: flex;
             align-items: center;
             gap: 1rem;
-            margin-bottom: 1rem;
+            margin-bottom: 2rem;
+            justify-content: flex-end;
         }
 
-        .user-avatar {
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            background-color: #4c6ef5;
-        }
-
-        .input-field {
-            width: 100%;
-            padding: 0.8rem;
+        .date-input {
+            padding: 0.5rem;
             border: 1px solid #e0e0e0;
             border-radius: 5px;
-            margin-bottom: 1rem;
-        }
-
-        .tab-group {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-
-        .tab {
-            padding: 0.5rem 1rem;
-            border-radius: 5px;
-            cursor: pointer;
-            background-color: #f8f9fa;
-        }
-
-        .tab.active {
-            background-color: #4c6ef5;
-            color: white;
+            font-size: 0.9rem;
         }
 
         .survey-list {
@@ -127,15 +80,6 @@
             color: #4c6ef5;
             text-decoration: none;
         }
-
-        .register-btn {
-            background-color: #4c6ef5;
-            color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 5px;
-            text-decoration: none;
-            font-size: 0.9rem;
-        }
     </style>
     <script>
         async function loadSurveyList() {
@@ -145,22 +89,7 @@
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const data = await response.json();
-                const tbody = document.querySelector('.survey-list tbody');
-                tbody.innerHTML = '';
-                
-                if (!data.documents || !Array.isArray(data.documents)) {
-                    throw new Error('Invalid data format');
-                }
-
-                data.documents.forEach(doc => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${doc.title || 'Untitled'}</td>
-                        <td>${doc.date || 'No date'}</td>
-                        <td><a href="./files/${doc.file}" class="view-link">View</a></td>
-                    `;
-                    tbody.appendChild(tr);
-                });
+                updateTable(data.documents);
             } catch (error) {
                 console.error('Error loading survey list:', error);
                 const tbody = document.querySelector('.survey-list tbody');
@@ -168,8 +97,50 @@
             }
         }
 
+        function updateTable(documents) {
+            const startDate = document.getElementById('start-date').value;
+            const endDate = document.getElementById('end-date').value;
+            
+            let filteredDocs = documents;
+            if (startDate && endDate) {
+                filteredDocs = documents.filter(doc => {
+                    const docDate = new Date(doc.date);
+                    return docDate >= new Date(startDate) && docDate <= new Date(endDate);
+                });
+            }
+
+            const tbody = document.querySelector('.survey-list tbody');
+            tbody.innerHTML = '';
+            
+            if (filteredDocs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3">No documents found in the selected date range.</td></tr>';
+                return;
+            }
+
+            filteredDocs.forEach(doc => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${doc.title || 'Untitled'}</td>
+                    <td>${doc.date || 'No date'}</td>
+                    <td><a href="./files/${doc.file}" class="view-link">View</a></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
         // 页面加载完成后执行
-        document.addEventListener('DOMContentLoaded', loadSurveyList);
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSurveyList();
+            
+            // 添加日期选择器的事件监听
+            document.getElementById('start-date').addEventListener('change', () => {
+                const startDate = new Date(document.getElementById('start-date').value);
+                document.getElementById('end-date').min = startDate.toISOString().split('T')[0];
+                loadSurveyList();
+            });
+            
+            document.getElementById('end-date').addEventListener('change', loadSurveyList);
+        });
     </script>
 </head>
 <body>
@@ -181,6 +152,12 @@
     <div class="container">
         <h1 class="title">✨ LLMxMapReduce-v2 ✨</h1>
         <p class="subtitle">Produced by THUNLP</p>
+
+        <div class="date-filter">
+            <input type="date" id="start-date" class="date-input" placeholder="Start Date">
+            <span>至</span>
+            <input type="date" id="end-date" class="date-input" placeholder="End Date">
+        </div>
 
         <table class="survey-list">
             <thead>
