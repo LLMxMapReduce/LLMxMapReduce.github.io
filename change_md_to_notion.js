@@ -202,8 +202,24 @@ async function uploadMarkdownToNotion(mdFilePath, parentPageId) {
     }
 }
 
-// 新增: 读取和更新 metadata.json
-async function updateMetadata(mdFilePath) {
+// 检查文件是否需要处理
+async function checkNeedsProcessing(mdFilePath) {
+    const metadataPath = './files/metadata.json';
+    let metadata;
+    try {
+        metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+    } catch (error) {
+        metadata = { documents: [] };
+    }
+
+    const fileName = mdFilePath.split('/').pop();
+    const existingDoc = metadata.documents.find(doc => doc.file === fileName);
+    
+    return !existingDoc || !existingDoc.notion_url;
+}
+
+// 添加或更新 metadata
+async function addToMetadata(mdFilePath, notionUrl) {
     const metadataPath = './files/metadata.json';
     let metadata;
     try {
@@ -216,20 +232,22 @@ async function updateMetadata(mdFilePath) {
     const existingDoc = metadata.documents.find(doc => doc.file === fileName);
     
     if (!existingDoc) {
+        // 添加新文档
         metadata.documents.push({
             title: fileName.replace('.md', ''),
-            file: fileName,
+            file: notionUrl,
             date: new Date().toISOString().split('T')[0]
         });
-        
-        fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
-        return true;
+    } else {
+        // 更新现有文档
+        existingDoc.notion_url = notionUrl;
+        existingDoc.date = new Date().toISOString().split('T')[0];
     }
     
-    return false;
+    fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
 }
 
-// 新增: 处理目录下所有 Markdown 文件
+// 修改 processAllMarkdownFiles 函数中的相关部分
 async function processAllMarkdownFiles() {
     try {
         const files = fs.readdirSync('./files')
@@ -237,30 +255,31 @@ async function processAllMarkdownFiles() {
         
         console.log(`找到 ${files.length} 个 Markdown 文件`);
         
-        // 创建所有文件的处理任务
-        const tasks = files.map(async file => {
+        const results = [];
+        // 串行处理每个文件
+        for (const file of files) {
             const filePath = `./files/${file}`;
-            const needsProcessing = await updateMetadata(filePath);
+            const needsProcessing = await checkNeedsProcessing(filePath);
             
             if (needsProcessing) {
                 console.log(`\n开始处理: ${file}`);
                 const parentPageId = '1bc430fca1448058b3d1fba86dfc27cf';
                 try {
                     const notionPageUrl = await uploadMarkdownToNotion(filePath, parentPageId);
+                    await addToMetadata(filePath, notionPageUrl);
                     console.log(`✅ 文件 ${file} 处理完成，URL: ${notionPageUrl}`);
-                    return { file, success: true, url: notionPageUrl };
+                    results.push({ file, success: true, url: notionPageUrl });
+                    
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 } catch (error) {
                     console.error(`❌ 文件 ${file} 处理失败:`, error.message);
-                    return { file, success: false, error: error.message };
+                    results.push({ file, success: false, error: error.message });
                 }
             } else {
                 console.log(`⏭️  跳过已处理的文件: ${file}`);
-                return { file, success: true, skipped: true };
+                results.push({ file, success: true, skipped: true });
             }
-        });
-
-        // 并行执行所有任务
-        const results = await Promise.all(tasks);
+        }
 
         // 统计处理结果
         const stats = {
@@ -276,7 +295,6 @@ async function processAllMarkdownFiles() {
         console.log(`已跳过: ${stats.skipped}`);
         console.log(`处理失败: ${stats.failed}`);
         
-        // 如果有失败的文件，列出它们
         if (stats.failed > 0) {
             console.log('\n失败的文件:');
             results
