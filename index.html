@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LLMxMapReduce</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
     <style>
         * {
             margin: 0;
@@ -66,8 +68,32 @@
         .subtitle {
             text-align: center;
             color: #666;
-            margin-bottom: 3rem;
+            margin-bottom: 1rem;
             font-size: 0.9rem;
+        }
+
+        .external-links {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .external-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+            color: #333;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+            background-color: white;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .external-link:hover {
+            background-color: #f8f9fa;
         }
 
         .date-filter {
@@ -298,6 +324,25 @@
     <div class="container">
         <h1 class="title">✨ LLMxMapReduce-v2 ✨</h1>
         <p class="subtitle">Produced by THUNLP</p>
+
+        <div class="external-links">
+            <a href="https://arxiv.org/pdf/xxxx" class="external-link" target="_blank">
+                <i class="fas fa-file-pdf"></i>
+                <span>Paper</span>
+            </a>
+            <a href="https://arxiv.org/abs/xxxx" class="external-link" target="_blank">
+                <i class="ai ai-arxiv"></i>
+                <span>arXiv</span>
+            </a>
+            <a href="https://github.com/thunlp/LLMxMapReduce" class="external-link" target="_blank">
+                <i class="fab fa-github"></i>
+                <span>Code</span>
+            </a>
+            <a href="https://huggingface.co/datasets/R0k1e/SurveyEval" class="external-link" target="_blank">
+                <i class="fas fa-database"></i>
+                <span>Data</span>
+            </a>
+        </div>
 
         <div class="date-filter">
             <input type="date" id="start-date" class="date-input" placeholder="Start Date">
