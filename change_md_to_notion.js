@@ -1,3 +1,4 @@
+require('dotenv').config();
 const fs = require('fs');
 const { Client } = require('@notionhq/client');
 const { markdownToBlocks } = require('@tryfabric/martian');
@@ -290,7 +291,7 @@ async function processAllMarkdownFiles() {
 
             if (needsProcessing) {
                 console.log(`\n开始处理: ${file}`);
-                const parentPageId = '1bc430fca1448058b3d1fba86dfc27cf';
+                const parentPageId = process.env.NOTION_PAGE_ID;
                 try {
                     const notionPageUrl = await uploadMarkdownToNotion(filePath, parentPageId);
                     await addToMetadata(filePath, notionPageUrl);

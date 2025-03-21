@@ -1,3 +1,5 @@
 ```js
-npm install @notionhq/client @tryfabric/martian
+npm install @notionhq/client @tryfabric/martian dotnev
 ```
+
+set `NOTION_PAGE_ID` and `NOTION_INTEGRATION_TOKEN` in `./.env`
