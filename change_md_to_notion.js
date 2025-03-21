@@ -235,7 +235,7 @@ async function addToMetadata(mdFilePath, notionUrl) {
         // 添加新文档
         metadata.documents.push({
             title: fileName.replace('.md', ''),
-            file: notionUrl,
+            url: notionUrl,
             date: new Date().toISOString().split('T')[0]
         });
     } else {

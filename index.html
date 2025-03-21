@@ -263,7 +263,7 @@
                 tr.innerHTML = `
                     <td>${doc.title || 'Untitled'}</td>
                     <td>${formattedDate}</td>
-                    <td><a href="./files/${doc.file}" class="view-link">View</a></td>
+                    <td><a href="${doc.url}" class="view-link">View</a></td>
                 `;
                 tbody.appendChild(tr);
             });
