@@ -251,7 +251,7 @@ async function addToMetadata(mdFilePath, notionUrl) {
         metadata = { documents: [] };
     }
 
-
+    const fileName = mdFilePath.split('/').pop();
     metadata.documents.push({
         title: fileName.replace('.md', ''),
         url: notionUrl,
@@ -303,7 +303,6 @@ async function processAllMarkdownFiles() {
                         url: notionPageUrl
                     });
 
-                    await new Promise(resolve => setTimeout(resolve, 1000));
                 } catch (error) {
                     console.error(`❌ 文件 ${file} 处理失败:`, error.message);
                     results.push({ file, success: false, error: error.message });
