@@ -43,7 +43,7 @@ function splitRichTextArray(richTextArray, maxLength = 100) {
     if (richTextArray.length <= maxLength) {
         return [richTextArray];
     }
-    
+
     const chunks = [];
     for (let i = 0; i < richTextArray.length; i += maxLength) {
         chunks.push(richTextArray.slice(i, i + maxLength));
@@ -56,93 +56,115 @@ async function uploadMarkdownToNotion(mdFilePath, parentPageId) {
     try {
         // 读取 Markdown 文件内容
         const mdContent = fs.readFileSync(mdFilePath, 'utf-8');
-        
+
         // 先提取引用URL映射
         const referenceMap = extractReferencesUrls(mdContent);
-        
+
         // 使用 martian 将 Markdown 转换为 Notion 块
         let blocks = await markdownToBlocks(mdContent);
 
         // 处理引用链接
         blocks = blocks.map(block => {
             if (block.type === 'paragraph' && block.paragraph.rich_text.length > 0) {
-                const text = block.paragraph.rich_text[0].text.content;
-                const citationPattern = /\[(\d+(?:\s*,\s*\d+)*?)(?=\])\]/g;
-                
-                if (text.match(citationPattern)) {
-                    const newRichText = [];
-                    let lastIndex = 0;
-                    let match;
+                // 检查是否是参考文献行
+                const isReference = block.paragraph.rich_text.some(rt =>
+                    rt.text?.content?.match(/^\[\d+\].*http/)
+                );
 
-                    while ((match = citationPattern.exec(text)) !== null) {
-                        // 添加引用前的文本
-                        if (match.index > lastIndex) {
-                            newRichText.push({
-                                type: 'text',
-                                text: { content: text.slice(lastIndex, match.index) }
-                            });
-                        }
+                if (isReference) {
+                    // 保持原始格式
+                    return block;
+                }
 
-                        // 处理引用
-                        const refNumbers = match[1].split(',').map(num => num.trim());
-                        for (let i = 0; i < refNumbers.length; i++) {
-                            const refNumber = refNumbers[i];
-                            const targetUrl = referenceMap.get(refNumber);
+                // 处理所有 rich_text 元素
+                const newRichText = [];
+                for (const richTextItem of block.paragraph.rich_text) {
+                    const text = richTextItem.text?.content || '';
+                    const citationPattern = /\[(\d+(?:\s*,\s*\d+)*?)(?=\])\]/g;
 
-                            if (i > 0) {
+                    if (text.match(citationPattern)) {
+                        let lastIndex = 0;
+                        let match;
+
+                        while ((match = citationPattern.exec(text)) !== null) {
+                            // 添加引用前的文本
+                            if (match.index > lastIndex) {
                                 newRichText.push({
-                                    type: 'text',
-                                    text: { content: ', ' }
-                                });
-                            } else {
-                                newRichText.push({
-                                    type: 'text',
-                                    text: { content: '[' }
+                                    ...richTextItem,
+                                    text: {
+                                        content: text.slice(lastIndex, match.index),
+                                        link: richTextItem.text.link
+                                    }
                                 });
                             }
 
+                            // 处理引用
+                            const refNumbers = match[1].split(',').map(num => num.trim());
+                            for (let i = 0; i < refNumbers.length; i++) {
+                                const refNumber = refNumbers[i];
+                                const targetUrl = referenceMap.get(refNumber);
+
+                                if (i > 0) {
+                                    newRichText.push({
+                                        type: 'text',
+                                        text: { content: ', ' }
+                                    });
+                                } else {
+                                    newRichText.push({
+                                        type: 'text',
+                                        text: { content: '[' }
+                                    });
+                                }
+
+                                newRichText.push({
+                                    type: 'text',
+                                    text: {
+                                        content: refNumber,
+                                        link: targetUrl ? { url: targetUrl } : null
+                                    }
+                                });
+
+                                if (i === refNumbers.length - 1) {
+                                    newRichText.push({
+                                        type: 'text',
+                                        text: { content: ']' }
+                                    });
+                                }
+                            }
+
+                            lastIndex = match.index + match[0].length;
+                        }
+
+                        // 添加剩余文本
+                        if (lastIndex < text.length) {
                             newRichText.push({
-                                type: 'text',
+                                ...richTextItem,
                                 text: {
-                                    content: refNumber,
-                                    link: targetUrl ? { url: targetUrl } : null
+                                    content: text.slice(lastIndex),
+                                    link: richTextItem.text.link
                                 }
                             });
-
-                            if (i === refNumbers.length - 1) {
-                                newRichText.push({
-                                    type: 'text',
-                                    text: { content: ']' }
-                                });
-                            }
                         }
-
-                        lastIndex = match.index + match[0].length;
+                    } else {
+                        // 如果没有引用，保持原始格式
+                        newRichText.push(richTextItem);
                     }
-
-                    // 添加剩余文本
-                    if (lastIndex < text.length) {
-                        newRichText.push({
-                            type: 'text',
-                            text: { content: text.slice(lastIndex) }
-                        });
-                    }
-
-                    block.paragraph.rich_text = newRichText;
                 }
+
+                block.paragraph.rich_text = newRichText;
             }
             return block;
         });
 
         // 处理富文本数组长度限制
         blocks = blocks.map(block => {
-            if (block.type === 'paragraph' && 
-                block.paragraph.rich_text && 
+            if (block.type === 'paragraph' &&
+                block.paragraph.rich_text &&
                 block.paragraph.rich_text.length > 100) {
-                
+
                 // 拆分富文本数组
                 const textChunks = splitRichTextArray(block.paragraph.rich_text);
-                
+
                 // 创建多个段落块
                 return textChunks.map(chunk => ({
                     type: 'paragraph',
@@ -213,9 +235,10 @@ async function checkNeedsProcessing(mdFilePath) {
     }
 
     const fileName = mdFilePath.split('/').pop();
-    const existingDoc = metadata.documents.find(doc => doc.file === fileName);
-    
-    return !existingDoc || !existingDoc.notion_url;
+    const title = fileName.replace('.md', '');
+    const existingDoc = metadata.documents.find(doc => doc.title === title);
+
+    return !existingDoc;
 }
 
 // 添加或更新 metadata
@@ -228,23 +251,25 @@ async function addToMetadata(mdFilePath, notionUrl) {
         metadata = { documents: [] };
     }
 
-    const fileName = mdFilePath.split('/').pop();
-    const existingDoc = metadata.documents.find(doc => doc.file === fileName);
-    
-    if (!existingDoc) {
-        // 添加新文档
-        metadata.documents.push({
-            title: fileName.replace('.md', ''),
-            url: notionUrl,
-            date: new Date().toISOString().split('T')[0]
-        });
-    } else {
-        // 更新现有文档
-        existingDoc.notion_url = notionUrl;
-        existingDoc.date = new Date().toISOString().split('T')[0];
-    }
-    
+
+    metadata.documents.push({
+        title: fileName.replace('.md', ''),
+        url: notionUrl,
+        date: new Date().toISOString().split('T')[0]
+    });
+
     fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
+}
+
+// 添加一个新函数用于保存新创建的页面 URL
+async function saveNewPagesUrls(newPages) {
+    const outputPath = `./logs/new_pages${new Date().toISOString().split('T')[0]}.md`;
+    const content = `# 新创建的 Notion 页面 (${new Date().toISOString().split('T')[0]})
+
+${newPages.map(page => `## ${page.title}\n${page.url}\n`).join('\n')}`;
+
+    fs.writeFileSync(outputPath, content, 'utf-8');
+    console.log(`\n新页面 URL 已保存至: ${outputPath}`);
 }
 
 // 修改 processAllMarkdownFiles 函数中的相关部分
@@ -252,15 +277,17 @@ async function processAllMarkdownFiles() {
     try {
         const files = fs.readdirSync('./files')
             .filter(file => file.endsWith('.md'));
-        
+
         console.log(`找到 ${files.length} 个 Markdown 文件`);
-        
+
         const results = [];
+        const newPages = []; // 新增：存储新创建的页面信息
+
         // 串行处理每个文件
         for (const file of files) {
             const filePath = `./files/${file}`;
             const needsProcessing = await checkNeedsProcessing(filePath);
-            
+
             if (needsProcessing) {
                 console.log(`\n开始处理: ${file}`);
                 const parentPageId = '1bc430fca1448058b3d1fba86dfc27cf';
@@ -269,7 +296,13 @@ async function processAllMarkdownFiles() {
                     await addToMetadata(filePath, notionPageUrl);
                     console.log(`✅ 文件 ${file} 处理完成，URL: ${notionPageUrl}`);
                     results.push({ file, success: true, url: notionPageUrl });
-                    
+
+                    // 新增：记录新创建的页面
+                    newPages.push({
+                        title: file.replace('.md', ''),
+                        url: notionPageUrl
+                    });
+
                     await new Promise(resolve => setTimeout(resolve, 1000));
                 } catch (error) {
                     console.error(`❌ 文件 ${file} 处理失败:`, error.message);
@@ -294,12 +327,24 @@ async function processAllMarkdownFiles() {
         console.log(`成功处理: ${stats.processed}`);
         console.log(`已跳过: ${stats.skipped}`);
         console.log(`处理失败: ${stats.failed}`);
-        
+
         if (stats.failed > 0) {
             console.log('\n失败的文件:');
             results
                 .filter(r => !r.success)
                 .forEach(r => console.log(`- ${r.file}: ${r.error}`));
+        }
+
+        // 新增：保存新创建的页面 URL
+        if (newPages.length > 0) {
+            await saveNewPagesUrls(newPages);
+            console.log('\n新创建的 Notion 页面:');
+            console.log('='.repeat(50));
+            newPages.forEach(page => {
+                console.log(`${page.title}`);
+                console.log(`${page.url}`);
+                console.log('-'.repeat(50));
+            });
         }
 
     } catch (error) {
