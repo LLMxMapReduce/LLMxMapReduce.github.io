@@ -1,5 +1,5 @@
 ```js
-npm install @notionhq/client @tryfabric/martian dotnev
+npm install @larksuiteoapi/node-sdk
 ```
 
-set `NOTION_PAGE_ID` and `NOTION_INTEGRATION_TOKEN` in `./.env`
+set `FEISHU_APP_ID`, `FEISHU_APP_SECRET` and `FEISHU_WIKI_SPACE_ID` in `.env`
