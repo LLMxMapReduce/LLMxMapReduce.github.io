@@ -1,6 +1,7 @@
 require('dotenv').config();
 const fs = require('fs');
 const { Client } = require('@larksuiteoapi/node-sdk');
+const { exec } = require('child_process');
 
 // 初始化飞书客户端
 const client = new Client({
@@ -10,8 +11,6 @@ const client = new Client({
 });
 
 const wiki_space_id = process.env.FEISHU_WIKI_SPACE_ID;
-const app_token = process.env.FEISHU_APP_TOKEN;
-const table_id = process.env.FEISHU_TABLE_ID;
 const domain_name = process.env.FEISHU_DOMAIN_NAME;
 
 // 添加缓存节点列表
@@ -19,6 +18,9 @@ let cachedNodes = null;
 
 // 获取所有节点的函数
 async function getAllNodes(rootToken) {
+    if (cachedNodes) {
+        return cachedNodes;
+    }
     try {
         let hasMore = true;
         let pageToken = '';
@@ -60,51 +62,6 @@ async function getAllNodes(rootToken) {
     }
 }
 
-// 修改查找节点函数，使用缓存的节点列表
-async function findExistingNode(rootToken, fileName) {
-    try {
-        // 如果还没有缓存节点列表，则获取
-        if (!cachedNodes) {
-            cachedNodes = await getAllNodes(rootToken);
-        }
-
-        const existingNode = cachedNodes.find(node => node.title === fileName);
-        return existingNode ? existingNode.obj_token : null;
-    } catch (error) {
-        console.error('查找节点失败:', error.message);
-        throw error;
-    }
-}
-
-// 添加获取文档元数据的函数
-async function getDocumentMetadata(docToken) {
-    try {
-        const response = await client.wiki.v2.space.getNode({
-            params: {
-                token: docToken
-            }
-        });
-
-        // 处理创建时间
-        let createTime;
-        try {
-            const timestamp = parseInt(response.data.node.node_create_time) * 1000;
-            createTime = new Date(timestamp).toISOString().split('T')[0];
-        } catch (error) {
-            console.warn('创建时间格式化失败，使用当前时间');
-            createTime = new Date().toISOString().split('T')[0];
-        }
-
-        return {
-            createTime,
-            modifyTime: new Date().toISOString().split('T')[0]
-        };
-    } catch (error) {
-        console.error('获取文档元数据失败:', error.message);
-        throw error;
-    }
-}
-
 // 添加 block 类型映射
 const BLOCK_TYPE_MAP = {
     'page': 1,
@@ -125,149 +82,179 @@ const BLOCK_TYPE_MAP = {
     'todo': 17,
     'callout': 19,
     'divider': 22,
-    'image': 27
+    'image': 27,
+    'table': 31,
+    'table_cell': 32,
 };
 
-async function markdownToFeishuBlocks(mdContent) {
-    const blocks = [];
-    const lines = mdContent.split('\n');
-    for (const line of lines) {
-        // 处理标题
-        const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
-        if (headingMatch) {
-            const level = headingMatch[1].length;
-            switch (level) {
-                case 1:
-                    blocks.push({
-                        block_type: BLOCK_TYPE_MAP.heading1,
-                        heading1: {
-                            elements: [{
-                                text_run: {
-                                    content: headingMatch[2]
-                                }
-                            }]
-                        }
-                    });
-                    break;
-                case 2:
-                    blocks.push({
-                        block_type: BLOCK_TYPE_MAP.heading2,
-                        heading2: {
-                            elements: [{
-                                text_run: {
-                                    content: headingMatch[2]
-                                }
-                            }]
-                        }
-                    });
-                    break;
-                case 3:
-                    blocks.push({
-                        block_type: BLOCK_TYPE_MAP.heading3,
-                        heading3: {
-                            elements: [{
-                                text_run: {
-                                    content: headingMatch[2]
-                                }
-                            }]
-                        }
-                    });
-                    break;
-                case 4:
-                    blocks.push({
-                        block_type: BLOCK_TYPE_MAP.heading4,
-                        heading4: {
-                            elements: [{
-                                text_run: {
-                                    content: headingMatch[2]
-                                }
-                            }]
-                        }
-                    });
-                    break;
-                case 5:
-                    blocks.push({
-                        block_type: BLOCK_TYPE_MAP.heading5,
-                        heading5: {
-                            elements: [{
-                                text_run: {
-                                    content: headingMatch[2]
-                                }
-                            }]
-                        }
-                    });
-                    break;
-                case 6:
-                    blocks.push({
-                        block_type: BLOCK_TYPE_MAP.heading6,
-                        heading6: {
-                            elements: [{
-                                text_run: {
-                                    content: headingMatch[2]
-                                }
-                            }]
-                        }
-                    });
-                    break;
+// 辅助函数：渲染 mermaid 代码并上传图片（这里以模拟方式返回图片 URL）
+async function renderMermaidAndUpload(figureTitle, codeContent, childObjToken) {
+    const os = require('os');
+    const tmpDir = os.tmpdir();
+    const path = require('path');
+    const fs = require('fs');
+    const { execSync } = require('child_process');
+
+    const fileName = (figureTitle.trim() || 'figure') + '.png';
+    const tmpFile = path.join(tmpDir, figureTitle.trim() + '.mmd');
+    const outputFilePath = path.join(tmpDir, fileName);
+
+    const procContent = codeContent.replace(/\\n/g, '\n');
+    fs.writeFileSync(tmpFile, procContent, 'utf-8');
+    try {
+        // 使用 npx 调用 mmdc 渲染 mermaid 代码
+        execSync(`npx mmdc -i "${tmpFile}" -o "${outputFilePath}"`);
+        console.log(`Mermaid 渲染成功: ${fileName}`);
+    } catch (error) {
+        console.error(`Mermaid 渲染失败, 跳过当前图片`);
+        return;
+    }
+
+    const block = [
+        {
+            block_type: BLOCK_TYPE_MAP.image,
+            image: {}
+        }
+    ];
+    const pic_upload_result = await uploadBlocks(block, childObjToken);
+    const pic_block_id = pic_upload_result.data.children[0].block_id;
+
+    // 获取图片的二进制内容和文件大小
+    const fileStream = fs.createReadStream(outputFilePath);
+    const fileStats = fs.statSync(outputFilePath);
+    const fileSize = fileStats.size;
+
+    const result = await client.drive.v1.media.uploadAll({
+        data: {
+            file_name: fileName,
+            parent_type: 'docx_image',
+            parent_node: pic_block_id,
+            size: fileSize,
+            file: fileStream,
+        },
+    });
+
+    const imageFileToken = result.file_token;
+
+    const update_result = await client.docx.v1.documentBlock.batchUpdate({
+        path: {
+            document_id: childObjToken,
+        },
+        data: {
+            requests: [
+                {
+                    block_id: pic_block_id,
+                    replace_image: {
+                        token: imageFileToken
+                    }
+                }
+            ]
+        }
+    });
+
+    fs.unlinkSync(tmpFile);
+    fs.unlinkSync(outputFilePath);
+    return result;
+}
+
+// 辅助函数：解析 markdown 表格内容，将其转换成二维数组（行和列）
+function parseMarkdownTable(tableContent) {
+    // 拆分全部行并过滤空行
+    const content = tableContent.trim().replace(/\\n/g, '\n');
+    const lines = content.split('\n').filter(line => line.trim());
+    const rows = [];
+    for (let i = 0; i < lines.length; i++) {
+        // 移除行首和行尾的竖线，并按竖线分割，再去除每个单元格的空格
+        const cells = lines[i].replace(/^\|/, '').replace(/\|$/, '').split('|').map(cell => cell.trim());
+        // 如果这一行是分隔行（只包含 - 和 :），则跳过
+        if (i === 1 && cells.every(cell => /^[:\-]+$/.test(cell))) {
+            continue;
+        }
+        rows.push(cells);
+    }
+    return rows;
+}
+
+async function updateFeishuTableContent(tableData, childObjToken) {
+    // 计算表格维度：行数 m 和列数 n（取所有行中最大列数）
+    const m = tableData.length;
+    const n = Math.max(...tableData.map(row => row.length));
+
+    // 生成一个唯一的表格块 id（可根据需求调整生成规则）
+    const tableBlockId = `table_${Date.now()}`;
+    const cellIds = [];  // 用于记录所有单元格 block_id，按行优先顺序排列
+
+    // 构造 descendants 数组，用于一次性创建整个表格块及其内部单元格和文本块
+    const descendants = [];
+
+    // 添加表格块，类型为 BLOCK_TYPE_MAP.table (31)
+    descendants.push({
+        block_id: tableBlockId,
+        children: [], // 后续再添加各单元格的 id
+        block_type: BLOCK_TYPE_MAP.table,
+        table: {
+            property: {
+                row_size: m,
+                column_size: n
             }
-            continue;
         }
+    });
 
-        // 处理无序列表
-        if (line.match(/^[\-\*]\s+(.+)$/)) {
-            const content = line.replace(/^[\-\*]\s+/, '');
-            blocks.push({
-                block_type: BLOCK_TYPE_MAP.bullet,  // 使用数字类型 12
-                bullet: {
-                    elements: [{
-                        text_run: {
-                            content: content
-                        }
-                    }]
-                }
+    // 对于每个单元格，创建 table_cell 块和对应的文本块
+    for (let i = 0; i < m; i++) {
+        for (let j = 0; j < n; j++) {
+            const cellId = `table_cell_${i}_${j}`;
+            cellIds.push(cellId);
+            const textBlockId = `table_cell_${i}_${j}_text`;
+            descendants.push({
+                block_id: cellId,
+                children: [textBlockId],
+                block_type: BLOCK_TYPE_MAP.table_cell,
+                table_cell: {}
             });
-            continue;
-        }
 
-        // 处理有序列表
-        const orderedListMatch = line.match(/^\d+\.\s+(.+)$/);
-        if (orderedListMatch) {
-            blocks.push({
-                block_type: BLOCK_TYPE_MAP.ordered,  // 使用数字类型 13
-                ordered: {
-                    elements: [{
-                        text_run: {
-                            content: orderedListMatch[1]
-                        }
-                    }]
-                }
-            });
-            continue;
-        }
-
-        // 处理分割线
-        if (line.match(/^[\-\*_]{3,}$/)) {
-            blocks.push({
-                block_type: BLOCK_TYPE_MAP.divider,  // 使用数字类型 22
-                divider: {}
-            });
-            continue;
-        }
-
-        // 处理普通段落
-        if (line.trim()) {
-            // 处理行内格式
-            const elements = processInlineFormatting(line);
-            blocks.push({
-                block_type: BLOCK_TYPE_MAP.text,  // 使用数字类型 2
+            const cellContent = tableData[i][j] || "";
+            descendants.push({
+                block_id: textBlockId,
+                children: [],
+                block_type: BLOCK_TYPE_MAP.text,
                 text: {
-                    elements: elements
+                    elements: {
+                        text_run: {
+                            content: cellContent,
+                        }
+                    }
                 }
             });
         }
     }
 
-    return blocks;
+    // 更新表格块的 children 字段为所有单元格 id（按从左到右、从上到下排列）
+    descendants[0].children = cellIds;
+
+    // 构造 payload，参照示例接口，注意：children_id 数组需包含表格块的 id
+    const payload = {
+        path: {
+            document_id: childObjToken,
+            block_id: childObjToken
+        },
+        data: {
+            // 这里将表格块 id 放到 children_id 中，表示该块为此次创建的目标
+            children_id: [tableBlockId],
+            descendants: descendants
+        }
+    };
+
+    // 调用 Feishu API 创建 Descendant 块，即创建整个表格及其内部内容
+    try {
+        const result = await client.docx.v1.documentBlockDescendant.create(payload);
+        console.log("表格上传成功");
+        return;
+    } catch (error) {
+        console.error("表格上传失败:", error.message);
+        return;
+    }
+
 }
 
 // 处理行内格式（加粗、斜体、链接等）
@@ -277,6 +264,44 @@ function processInlineFormatting(text) {
     let i = 0;
 
     while (i < text.length) {
+        if (text.slice(i).match(/^\$\$([^$]+)\$\$/)) {
+            const match = text.slice(i).match(/^\$\$([^$]+)\$\$/);
+            if (currentText) {
+                parts.push({
+                    text_run: {
+                        content: currentText
+                    }
+                });
+                currentText = '';
+            }
+            parts.push({
+                equation: {
+                    content: match[1].trim(),
+                }
+            });
+            i += match[0].length;
+            continue;
+        }
+
+        // 处理行内公式 ($...$)
+        if (text.slice(i).match(/^\$([^$]+)\$/)) {
+            const match = text.slice(i).match(/^\$([^$]+)\$/);
+            if (currentText) {
+                parts.push({
+                    text_run: {
+                        content: currentText
+                    }
+                });
+                currentText = '';
+            }
+            parts.push({
+                equation: {
+                    content: match[1].trim(),
+                }
+            });
+            i += match[0].length;
+            continue;
+        }
         // 处理加粗
         if (text.slice(i).match(/^\*\*([^*]+)\*\*/)) {
             const match = text.slice(i).match(/^\*\*([^*]+)\*\*/);
@@ -290,11 +315,12 @@ function processInlineFormatting(text) {
             }
             parts.push({
                 text_run: {
-                    content: match[1]
-                },
-                text_element_style: {
-                    bold: true
+                    content: match[1],
+                    text_element_style: {
+                        bold: true
+                    }
                 }
+
             });
             i += match[0].length;
             continue;
@@ -313,10 +339,10 @@ function processInlineFormatting(text) {
             }
             parts.push({
                 text_run: {
-                    content: match[1]
-                },
-                text_element_style: {
-                    italic: true
+                    content: match[1],
+                    text_element_style: {
+                        italic: true
+                    }
                 }
             });
             i += match[0].length;
@@ -370,64 +396,234 @@ function chunkBlocks(blocks, size = 50) {
     return chunks;
 }
 
-// 添加更新多维表格的函数
-async function updateBitableRecord(fileName, docUrl) {
-    try {
-        const response = await client.bitable.v1.appTableRecord.search({
-            path: {
-                app_token: app_token,
-                table_id: table_id
-            },
-            params: {
-                filter: {
-                    conjunction: "and",
-                    conditions: [
-                        {
-                            conditions: 'Title',
-                            operator: "is",
-                            value: fileName
-                        }
-                    ]
-                }
-            }
-        });
+async function uploadBlocks(chunk, childObjToken) {
+    const result = await client.docx.v1.documentBlockChildren.create({
+        path: {
+            document_id: childObjToken,
+            block_id: childObjToken
+        },
+        data: {
+            children: chunk,
+        }
+    });
+    return result;
+}
 
-        // 更新现有记录
-        const recordId = response.data.items[0].record_id;
-        // 获取创建时间，如果不存在则使用当前时间
-        const contentModified = new Date().now();
-        const contentCreated = response.data?.items?.[0]?.fields?.['Content Created'] ?? new contentModified;
-
-        await client.bitable.v1.appTableRecord.update({
-            path: {
-                app_token: app_token,
-                table_id: table_id,
-                record_id: recordId
-            },
-            data: {
-                fields: {
-                    "Content": {
-                        "text": "Click Here",
-                        "link": docUrl
-                    },
-                    "Content Created": contentCreated,
-                    "Content Modified": contentModified
-                }
-            }
-        });
-        console.log('✅ 已更新现有记录');
-
-    } catch (error) {
-        console.error('更新多维表格失败:', error.message);
-        throw error;
+async function uploadMultiChunks(accumulatedBlocks, childObjToken) {
+    let results = [];
+    if (accumulatedBlocks.length > 0) {
+        const chunks = chunkBlocks(accumulatedBlocks, 50);
+        for (const chunk of chunks) {
+            const result = await uploadBlocks(chunk, childObjToken);
+            results.push(result);
+        }
+        accumulatedBlocks = [];
     }
+    // 同样返回对象
+    return results;
+}
+
+// 添加预处理函数在 processAndUploadMdContent 函数之前
+function preprocessMarkdown(mdContent) {
+    // 使用正则表达式匹配多行LaTeX公式
+    const multiLineLatexRegex = /\$\$([\s\S]*?)\$\$/g;
+
+    // 替换多行公式为单行
+    let processedContent = mdContent.replace(multiLineLatexRegex, (match, formula) => {
+        // 去除公式内的换行和多余空格
+        let processedFormula = formula
+            .trim()
+            .replace(/\n\s*/g, ' ')
+            .replace(/\s+/g, ' ');
+        return `$$${processedFormula}$$`;
+    });
+
+    return processedContent;
+}
+
+// 修改 processAndUploadMdContent 函数,在开始处添加预处理步骤
+async function processAndUploadMdContent(mdContent, childObjToken) {
+    // 添加预处理步骤
+    const processedContent = preprocessMarkdown(mdContent);
+
+    let accumulatedBlocks = [];
+    const lines = processedContent.split('\n');
+
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i];
+
+        // 检测 mermaid 块
+        const mermaidRegex = /<figure-link\s+title=['"]([^'"]+)['"]\s+type=['"]mermaid['"]\s+content=['"]([\s\S]*?)['"]><\/figure-link>/;
+        const mermaidMatch = line.match(mermaidRegex);
+        if (mermaidMatch) {
+            const result = await uploadMultiChunks(accumulatedBlocks, childObjToken);
+            accumulatedBlocks = [];
+            const figureTitle = mermaidMatch[1];
+            const codeContent = mermaidMatch[2];
+            const uploadResult = await renderMermaidAndUpload(figureTitle, codeContent, childObjToken);
+            continue;
+        }
+
+        // 检测 markdown 表格块
+        const tableRegex = /<figure-link\s+title=['"]([^'"]+)['"]\s+type=['"]markdown['"]\s+content=['"]([\s\S]*?)['"]><\/figure-link>/;
+        const tableMatch = line.match(tableRegex);
+        if (tableMatch) {
+            // 先上传前面已经解析的块，使用 chunkBlocks 分块上传
+            const result = await uploadMultiChunks(accumulatedBlocks, childObjToken);
+            accumulatedBlocks = [];
+            // 直接从匹配结果获取表格内容（无需替换 '\\n'）
+            const tableContent = tableMatch[2];
+            const rows = parseMarkdownTable(tableContent);
+            // 调用函数上传表格块（内部会创建表格块并依次填充各单元格）
+            await updateFeishuTableContent(rows, childObjToken);
+            continue;
+        }
+
+        // 处理标题
+        const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+        if (headingMatch) {
+            const level = headingMatch[1].length;
+            switch (level) {
+                case 1:
+                    accumulatedBlocks.push({
+                        block_type: BLOCK_TYPE_MAP.heading1,
+                        heading1: {
+                            elements: [{
+                                text_run: {
+                                    content: headingMatch[2]
+                                }
+                            }]
+                        }
+                    });
+                    break;
+                case 2:
+                    accumulatedBlocks.push({
+                        block_type: BLOCK_TYPE_MAP.heading2,
+                        heading2: {
+                            elements: [{
+                                text_run: {
+                                    content: headingMatch[2]
+                                }
+                            }]
+                        }
+                    });
+                    break;
+                case 3:
+                    accumulatedBlocks.push({
+                        block_type: BLOCK_TYPE_MAP.heading3,
+                        heading3: {
+                            elements: [{
+                                text_run: {
+                                    content: headingMatch[2]
+                                }
+                            }]
+                        }
+                    });
+                    break;
+                case 4:
+                    accumulatedBlocks.push({
+                        block_type: BLOCK_TYPE_MAP.heading4,
+                        heading4: {
+                            elements: [{
+                                text_run: {
+                                    content: headingMatch[2]
+                                }
+                            }]
+                        }
+                    });
+                    break;
+                case 5:
+                    accumulatedBlocks.push({
+                        block_type: BLOCK_TYPE_MAP.heading5,
+                        heading5: {
+                            elements: [{
+                                text_run: {
+                                    content: headingMatch[2]
+                                }
+                            }]
+                        }
+                    });
+                    break;
+                case 6:
+                    accumulatedBlocks.push({
+                        block_type: BLOCK_TYPE_MAP.heading6,
+                        heading6: {
+                            elements: [{
+                                text_run: {
+                                    content: headingMatch[2]
+                                }
+                            }]
+                        }
+                    });
+                    break;
+            }
+            continue;
+        }
+
+        // 处理无序列表
+        if (line.match(/^[\-\*]\s+(.+)$/)) {
+            const content = line.replace(/^[\-\*]\s+/, '');
+            accumulatedBlocks.push({
+                block_type: BLOCK_TYPE_MAP.bullet,  // 使用数字类型 12
+                bullet: {
+                    elements: [{
+                        text_run: {
+                            content: content
+                        }
+                    }]
+                }
+            });
+            continue;
+        }
+
+        // 处理有序列表
+        const orderedListMatch = line.match(/^\d+\.\s+(.+)$/);
+        if (orderedListMatch) {
+            accumulatedBlocks.push({
+                block_type: BLOCK_TYPE_MAP.ordered,  // 使用数字类型 13
+                ordered: {
+                    elements: [{
+                        text_run: {
+                            content: orderedListMatch[1]
+                        }
+                    }]
+                }
+            });
+            continue;
+        }
+
+        // 处理分割线
+        if (line.match(/^[\-\*_]{3,}$/)) {
+            accumulatedBlocks.push({
+                block_type: BLOCK_TYPE_MAP.divider,  // 使用数字类型 22
+                divider: {}
+            });
+            continue;
+        }
+
+        // 处理普通段落
+        if (line.trim()) {
+            // 处理行内格式
+            const elements = processInlineFormatting(line);
+            accumulatedBlocks.push({
+                block_type: BLOCK_TYPE_MAP.text,  // 使用数字类型 2
+                text: {
+                    elements: elements
+                }
+            });
+        }
+    }
+
+    const result = await uploadMultiChunks(accumulatedBlocks, childObjToken);
+    accumulatedBlocks = [];
 }
 
 // 修改上传函数，支持更新现有文档
 async function uploadToFeishu(mdContent, fileName) {
     try {
-        const rootToken = process.env.FEISHU_ROOT_TOKEN
+        const rootToken = process.env.FEISHU_ROOT_TOKEN;
         // 1. 查找或创建父节点 A
+        cachedNodes = await getAllNodes(rootToken);
         let parentNode = cachedNodes.find(node => node.title === fileName);
         let parentNodeToken;
         let parentObjToken;
@@ -445,7 +641,6 @@ async function uploadToFeishu(mdContent, fileName) {
             });
             parentNodeToken = createParentResponse.data.node.node_token;
             parentObjToken = createParentResponse.data.node.obj_token;
-
         } else {
             parentNodeToken = parentNode.node_token;
             parentObjToken = parentNode.obj_token;
@@ -454,7 +649,7 @@ async function uploadToFeishu(mdContent, fileName) {
 
         // 2. 创建内容节点 B
         const currentDate = new Date();
-        const childTitle = `${currentDate.toISOString().split('T')[0]}_${fileName}`;
+        const childTitle = `${currentDate.toISOString()}_${fileName}`;
 
         console.log(`创建内容节点: ${childTitle}`);
         const createChildResponse = await client.wiki.v2.spaceNode.create({
@@ -469,34 +664,13 @@ async function uploadToFeishu(mdContent, fileName) {
         const childToken = createChildResponse.data.node.node_token;
         const childObjToken = createChildResponse.data.node.obj_token;
 
-        // 3. 将内容写入节点 B
-        const blocks = await markdownToFeishuBlocks(mdContent);
-        const blockChunks = chunkBlocks(blocks);
-
-        console.log('开始上传内容...');
-        let currentIndex = 0;
-        for (const chunk of blockChunks) {
-            await client.docx.v1.documentBlockChildren.create({
-                path: {
-                    document_id: childObjToken,
-                    block_id: childObjToken
-                },
-                data: {
-                    children: chunk,
-                    index: currentIndex
-                }
-            });
-
-            currentIndex += chunk.length;
-            const progress = Math.round((currentIndex / blocks.length) * 100);
-            process.stdout.write(`\r正在上传内容... ${progress}% [${currentIndex}/${blocks.length}]`);
-            await new Promise(resolve => setTimeout(resolve, 200));
-        }
+        // 3. 解析 Markdown 并沿解析过程中实时上传块
+        await processAndUploadMdContent(mdContent, childObjToken);
 
         // 4. 获取节点 B 的链接
         const childUrl = `https://${domain_name}.feishu.cn/wiki/${childToken}`;
 
-        // 5. 更新父节点 A 的内容
+        // 5. 更新父节点 A 的内容（例如，将新文档的链接添加到父节点）
         const summaryBlocks = [
             {
                 block_type: BLOCK_TYPE_MAP.text,
@@ -524,7 +698,7 @@ async function uploadToFeishu(mdContent, fileName) {
             },
             data: {
                 children: summaryBlocks,
-                index: 0
+                // index: 0
             }
         });
 
@@ -757,7 +931,7 @@ async function getAllComments() {
                     // 添加二级节点信息
                     childrenInfo.push({
                         title: level2Node.title,
-                        url: getNodeUrl(level2Node),  
+                        url: getNodeUrl(level2Node),
                         createTime: new Date(level2Node.node_create_time * 1000).toISOString(),
                         directCommentCount: count.directCount,
                         allCommentCount: count.allCount,
@@ -903,5 +1077,17 @@ async function processAllFiles() {
     //     process.exit(1);
     // }
     // getAllLikes()
-    getAllComments()
+    // getAllComments()
+
+    const filePath = `./output_with_fig.json`;
+    const fileContent = fs.readFileSync(filePath, 'utf-8');
+    const dataObj = JSON.parse(fileContent);
+
+    const title = dataObj.title;
+    const content = dataObj.content;
+    uploadToFeishu(content, title).then(res => {
+        console.log('上传成功:', res);
+    }).catch(err => {
+        console.error('上传失败:', err);
+    });
 })();

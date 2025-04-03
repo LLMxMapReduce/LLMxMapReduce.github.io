@@ -1,10 +1,8 @@
 {
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.45.0",
-    "@notionhq/client": "^2.3.0",
-    "@tryfabric/martian": "^1.2.4",
     "dotenv": "^16.4.7",
-    "markdown-it": "^14.1.0",
-    "notion-md": "^1.0.6"
+    "marked": "^15.0.7",
+    "puppeteer": "^24.4.0"
   }
 }
