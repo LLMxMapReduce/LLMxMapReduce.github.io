@@ -219,11 +219,7 @@ async function updateFeishuTableContent(tableData, childObjToken) {
                 children: [],
                 block_type: BLOCK_TYPE_MAP.text,
                 text: {
-                    elements: {
-                        text_run: {
-                            content: cellContent,
-                        }
-                    }
+                    elements: processInlineFormatting(cellContent)
                 }
             });
         }
